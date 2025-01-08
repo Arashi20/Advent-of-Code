@@ -1,0 +1,130 @@
+*&---------------------------------------------------------------------*
+*& Report z_161am_adventofcode1
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+*Advent of code (Day 1 2024)
+REPORT z_161am_adventofcode1.
+
+
+PARAMETERS: p_file TYPE STRING.   "input for the file (every line has 2 numbers, separated by commas)
+
+
+TYPES: BEGIN OF table_splitted,  "one type for the splitted table
+       number TYPE i,
+       END OF table_splitted,
+
+       BEGIN OF table_combined,   "one type for the combined table
+       number1 TYPE i,
+       number2 TYPE i,
+       distance TYPE i,
+       END OF table_combined.
+
+
+DATA:  file_table TYPE filetable,
+       returncode TYPE i,
+       ta_uploaded TYPE stringtab,
+       ta_splitted1 TYPE TABLE OF table_splitted, "for the splitted tables
+       ta_splitted2 TYPE TABLE OF table_splitted,
+       ta_combined TYPE TABLE OF table_combined,  "for the combined table
+       sum TYPE i.
+
+
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.  "for any file upload
+CALL METHOD cl_gui_frontend_services=>file_open_dialog
+  CHANGING
+    file_table              = file_table
+    rc                      = returncode
+
+  EXCEPTIONS
+    file_open_dialog_failed = 1
+    cntl_error              = 2
+    error_no_gui            = 3
+    not_supported_by_gui    = 4
+    others                  = 5
+  .
+IF SY-SUBRC <> 0.
+ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+   WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+ELSE.
+ p_file = file_table[ 1 ]-filename.
+ENDIF.
+
+
+
+START-OF-SELECTION.
+CALL METHOD cl_gui_frontend_services=>gui_upload
+  EXPORTING
+    filename                = p_file
+    filetype                = 'ASC'
+    has_field_separator     = space
+    header_length           = 0
+    read_by_line            = 'X'
+    dat_mode                = space
+    codepage                = space
+    ignore_cerr             = abap_true
+    replacement             = '#'
+    virus_scan_profile      = space
+  CHANGING
+  data_tab                 = ta_uploaded  "most important part
+  EXCEPTIONS
+    file_open_error         = 1
+    file_read_error         = 2
+    no_batch                = 3
+    gui_refuse_filetransfer = 4
+    invalid_type            = 5
+    no_authority            = 6
+    unknown_error           = 7
+    bad_data_format         = 8
+    header_not_allowed      = 9
+    separator_not_allowed   = 10
+    header_too_long         = 11
+    unknown_dp_error        = 12
+    access_denied           = 13
+    dp_out_of_memory        = 14
+    disk_full               = 15
+    dp_timeout              = 16
+    not_supported_by_gui    = 17
+    error_no_gui            = 18
+    others                  = 19
+  .
+IF SY-SUBRC <> 0.  "if something goes wrong with file upload
+ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+   WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+
+  ELSE.
+  "Logic for looping over both columns of the table
+  LOOP AT ta_uploaded ASSIGNING FIELD-SYMBOL(<row>).     "no need to loop it into another variable, you can use the pointer <row>
+  SPLIT <row> AT space INTO TABLE DATA(table_splitted).             "split at spaces, and write it to the splitted table
+  DELETE table_splitted WHERE TABLE_LINE IS INITIAL.     "In case you have more than 1 space
+
+
+  IF lines( table_splitted ) = 2.  "you should have 2 numbers now
+  APPEND VALUE #( number = table_splitted[ 1 ] ) TO ta_splitted1.      "index 1 goes to the first table
+  APPEND VALUE #( number = table_splitted[ 2 ] ) TO ta_splitted2.     "index 2 goes to the second table
+
+  ELSE.
+  MESSAGE |ROW { sy-tabix } is not processed correctly| TYPE 'E'.  "in case something went wrong.
+
+ ENDIF.
+ ENDLOOP.
+
+  "Sort both the tables
+  SORT ta_splitted1 BY number ASCENDING.
+  SORT ta_splitted2 BY number ASCENDING.
+
+    IF lines( ta_splitted1 ) = lines( ta_splitted2 ).  "if both lines are equal in length
+      LOOP AT ta_splitted1 ASSIGNING FIELD-SYMBOL(<split1>).   "loop over the first table with a pointer
+        APPEND VALUE #( number1 = <split1>-number
+                        number2 = ta_splitted2[ sy-tabix ]-number
+                        distance = abs( <split1>-number - ta_splitted2[ sy-tabix ]-number )  ) TO ta_combined.
+        sum += abs( <split1>-number - ta_splitted2[ sy-tabix ]-number ).
+      ENDLOOP.
+    ELSE.
+      MESSAGE |Something went wrong, tables are not equal length| TYPE 'E'.
+    ENDIF.
+
+    cl_demo_output=>display( sum ).
+ENDIF.
